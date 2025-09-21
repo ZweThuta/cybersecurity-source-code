@@ -1,0 +1,8 @@
+node_modultes
+.next
+.husky
+.vscode
+tailwind.config
+.eslintignore
+eslint.config.js
+vite.config.ts
