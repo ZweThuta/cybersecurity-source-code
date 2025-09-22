@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSun, FiMoon } from 'react-icons/fi';
-import { useTheme } from './ThemeProvider';
 import { GamingButton } from './ui/gaming-button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +21,6 @@ import toast from 'react-hot-toast';
 const Header: React.FC = () => {
   const { data: user, isLoading, isError } = useGetCurrentUserQuery();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { theme, setTheme } = useTheme();
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -37,7 +34,7 @@ const Header: React.FC = () => {
   return (
     <>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <header className="sticky top-0 z-50 w-full glass border-b-[#B366FF] border-b-4">
+      <header className="sticky top-0 z-50 w-full glass border-b-[#B366FF]  border-b-4">
         <div className="px-4 h-16 flex items-center justify-between mx-5">
           {/* Left side */}
           <div className="flex justify-between items-center space-x-4 sm:space-x-10">
@@ -49,10 +46,10 @@ const Header: React.FC = () => {
 
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-gaming rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">G</span>
-              </div>
-              <span className="text-lg sm:text-xl font-bold gradient-text">GameHub</span>
+              <h1 className="text-xl font-extrabold flex gap-1 items-center text-white animate-pulse">
+                <Icon icon="mdi:shield-lock" className="w-7 h-7 text-white" /> Access
+                <span className="text-[#9C6CFE]">Hub</span>
+              </h1>
             </Link>
           </div>
 
@@ -60,18 +57,6 @@ const Header: React.FC = () => {
           <div className="flex items-center space-x-4 sm:space-x-6">
             {/* Theme Toggle & Notifications */}
             <div className="flex gap-2 sm:gap-4">
-              <GamingButton
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              >
-                {theme === 'dark' ? (
-                  <FiSun className="h-5 w-5 text-white hover:scale-105 transition-transform duration-200" />
-                ) : (
-                  <FiMoon className="h-5 w-5 text-white hover:scale-105 transition-transform duration-200" />
-                )}
-              </GamingButton>
-
               <GamingButton variant="ghost" size="icon" className="relative">
                 <Icon
                   icon="ion:notifications"

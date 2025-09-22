@@ -4,110 +4,98 @@ import React from 'react';
 
 const Footer: React.FC = () => {
   return (
-    <>
-      <footer className="top-0 z-50 w-full glass">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-8 border-b-[#B366FF] border-b-4">
-          <div className="ml-12 mt-10">
-            <Link to="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-gaming rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">G</span>
-              </div>
-              <span className="text-lg sm:text-xl font-bold gradient-text">GameHub</span>
-            </Link>
-            <p className="mt-4 text-sm leading-relaxed">
-              The ultimate multiplayer gaming experience. Connect, compete, and conquer with friends
-              from around the world.
-            </p>
-          </div>
-          <div className="ml-5 mt-10 max-w-48">
-            <h3 className="font-semibold text-cyan-500 mb-3 flex items-center gap-2">
-              <Icon icon="lucide:link" className="text-cyan-500 text-xl" />
-              Quick Link
-            </h3>
-            <ul className="space-y-2 text-sm ml-7">
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Profile
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Games
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Shop
-                </Link>
-              </li>
-            </ul>
-          </div>
-          <div className="ml-5 mt-10 max-w-48">
-            <h3 className="font-semibold text-purple-500 mb-3 flex items-center gap-2">
-              <Icon icon="fluent:people-community-24-regular" className="text-purple-500 text-xl" />
-              Community
-            </h3>
-            <ul className="space-y-2 text-sm ml-7">
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Friends
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Chat Room
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Leaderboards
-                </Link>
-              </li>
-            </ul>
-          </div>
-          <div className="ml-5 mt-10 max-w-48">
-            <h3 className="font-semibold text-yellow-500 mb-3 flex items-center gap-2">
-              <Icon icon="ix:about" className="text-yellow-500 text-xl" />
-              Support
-            </h3>
-            <ul className="space-y-2 text-sm ml-7">
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Contact Us
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link to="/" className="hover:text-white">
-                  Terms of Service
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div className="flex flex-col md:flex-row items-center justify-between p-8 text-lg">
-          <p>&copy;2025 GamePlatform. All rights reserved.</p>
-          <p className="flex items-center gap-1 mt-2 md:mt-0">
-            Made with <Icon icon="solar:heart-bold" className="text-red-600 text-xl" /> for the
-            gaming community.
+    <footer className="relative w-full bg-[#1C1825] text-gray-300 border-t border-[#2A2633]">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-8 px-8 md:px-16 lg:px-24 py-12">
+        {/* Brand */}
+        <div>
+          <Link to="/" className="flex items-center space-x-2">
+            <h1 className="text-2xl font-extrabold flex gap-1 items-center text-white">
+              <Icon icon="mdi:shield-lock" className="w-7 h-7 text-white" />
+              Access<span className="text-[#9C6CFE]">Hub</span>
+            </h1>
+          </Link>
+          <p className="mt-4 text-sm leading-relaxed text-gray-400">
+            A secure, token-based authentication hub designed to protect your digital access with
+            simplicity and strength.
           </p>
         </div>
-      </footer>
-    </>
+
+        {/* Quick Links */}
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-4">Quick Links</h3>
+          <ul className="space-y-2 text-sm">
+            <li>
+              <Link to="/about" className="hover:text-[#9C6CFE]">
+                About Us
+              </Link>
+            </li>
+            <li>
+              <Link to="/docs" className="hover:text-[#9C6CFE]">
+                Documentation
+              </Link>
+            </li>
+            <li>
+              <Link to="/privacy" className="hover:text-[#9C6CFE]">
+                Privacy Policy
+              </Link>
+            </li>
+            <li>
+              <Link to="/contact" className="hover:text-[#9C6CFE]">
+                Contact
+              </Link>
+            </li>
+          </ul>
+        </div>
+
+        {/* Resources */}
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-4">Resources</h3>
+          <ul className="space-y-2 text-sm">
+            <li>
+              <Link to="/support" className="hover:text-[#9C6CFE]">
+                Support
+              </Link>
+            </li>
+            <li>
+              <Link to="/faq" className="hover:text-[#9C6CFE]">
+                FAQs
+              </Link>
+            </li>
+            <li>
+              <Link to="/api" className="hover:text-[#9C6CFE]">
+                API Access
+              </Link>
+            </li>
+            <li>
+              <Link to="/security" className="hover:text-[#9C6CFE]">
+                Security
+              </Link>
+            </li>
+          </ul>
+        </div>
+
+        {/* Social Media */}
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-4">Follow Us</h3>
+          <div className="flex space-x-4">
+            <a href="#" target="_blank" rel="noreferrer">
+              <Icon icon="mdi:github" className="w-6 h-6 hover:text-[#9C6CFE]" />
+            </a>
+            <a href="#" target="_blank" rel="noreferrer">
+              <Icon icon="mdi:linkedin" className="w-6 h-6 hover:text-[#9C6CFE]" />
+            </a>
+            <a href="#" target="_blank" rel="noreferrer">
+              <Icon icon="mdi:twitter" className="w-6 h-6 hover:text-[#9C6CFE]" />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Section */}
+      <div className="flex flex-col md:flex-row items-center justify-center px-8 md:px-16 lg:px-24 py-6 border-t border-[#2A2633] text-sm">
+        <p>&copy; {new Date().getFullYear()} AccessHub. All rights reserved.</p>
+      </div>
+    </footer>
   );
 };
 

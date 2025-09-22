@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { loginBg } from '@/assests';
 import { FloatingElements, ParticleEffect } from '@/components';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
 import { useLoginMutation } from '@/features/auth/authApi';
@@ -75,7 +74,7 @@ const LoginPage: React.FC = () => {
           refreshToken: res.refreshToken,
         }),
       );
-      toast.success('Welcome back!');
+      toast.success('Welcome to the system!');
       navigate('/');
     } catch (err: any) {
       console.error('Login failed:', err);
@@ -84,30 +83,23 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <section className="flex flex-col md:flex-row h-screen font-inter bg-[#1C1825] overflow-hidden">
+    <section className="flex flex-col md:flex-row md:justify-center h-screen font-inter overflow-hidden">
       <FloatingElements />
       <ParticleEffect />
 
-      {/* Left Side */}
-      <div className="flex flex-col mt-20 lg:mt-0 justify-center px-8 md:px-16 lg:px-24 bg-[#1C1825] w-full md:w-3/5">
+      <div className="flex flex-col mt-20 lg:mt-0 justify-center px-8 md:px-16 w-full lg:w-1/2">
         <div className="mb-10">
-          <h1 className="text-2xl font-extrabold text-white">
-            Game<span className="text-[#9C6CFE]">Hub</span>
+          <h1 className="text-2xl font-extrabold flex gap-1 items-center text-white">
+            <Icon icon="mdi:shield-lock" className="w-7 h-7 text-white" /> Access
+            <span className="text-[#9C6CFE]">Hub</span>
           </h1>
         </div>
 
         <div className="mb-8">
-          <h1 className="text-3xl lg:text-4xl font-extrabold text-white">Welcome Back!</h1>
+          <h1 className="text-3xl lg:text-4xl font-extrabold text-white">Login Here!</h1>
           <p className="text-gray-300 mt-3 text-sm md:text-base leading-relaxed">
-            Champion! Log in with your username and password to start your journey!
+            A secure staff management system with token-based authentication.
           </p>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center mb-5">
-          <hr className="flex-grow border-t border-gray-600" />
-          <span className="mx-2 text-gray-400 text-sm">OR</span>
-          <hr className="flex-grow border-t border-gray-600" />
         </div>
 
         {/* Email Input */}
@@ -174,27 +166,6 @@ const LoginPage: React.FC = () => {
           Don’t have an account?{' '}
           <Link to="/sign-up" className="text-[#7A41DC] hover:underline">
             Sign Up
-          </Link>
-        </div>
-      </div>
-
-      {/* Right Side */}
-      <div
-        className="hidden md:flex w-full md:w-1/2 bg-cover bg-center relative"
-        style={{ backgroundImage: `url(${loginBg})` }}
-      >
-        <div className="absolute top-5 right-5 flex gap-3">
-          <Link
-            to="/sign-up"
-            className="px-7 py-2 text-white font-semibold rounded-full hover:opacity-80 hover:underline transition"
-          >
-            Sign Up
-          </Link>
-          <Link
-            to="/login"
-            className="px-7 py-2 text-sm text-center text-black font-semibold bg-white border border-white rounded-full hover:bg-white hover:text-black transition"
-          >
-            Join Us
           </Link>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import MainLayout from '../layouts/MainLayout';
-import { FloatingParticles, FloatingElements } from '@/components';
+import { FloatingParticles, FloatingElements, Home } from '@/components';
 
 const HomePage: React.FC = () => {
   return (
@@ -8,7 +8,7 @@ const HomePage: React.FC = () => {
       <FloatingElements />
       <FloatingParticles />
       <MainLayout>
-        <div className="h-screen">Hello World!</div>
+       <Home/>
       </MainLayout>
     </div>
   );

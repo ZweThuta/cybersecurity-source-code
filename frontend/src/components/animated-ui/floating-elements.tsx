@@ -2,13 +2,14 @@ import React from 'react';
 import { motion } from 'framer-motion';
 
 export const FloatingElements: React.FC = () => {
-  const floatingShapes = Array.from({ length: 8 }, (_, i) => ({
+  const floatingShapes = Array.from({ length: 10 }, (_, i) => ({
     id: i,
-    size: Math.random() * 40 + 20,
+    size: Math.random() * 35 + 25,
     initialX: Math.random() * window.innerWidth,
     initialY: Math.random() * window.innerHeight,
-    duration: Math.random() * 20 + 10,
-    delay: Math.random() * 5,
+    duration: Math.random() * 25 + 15,
+    delay: Math.random() * 6,
+    shape: Math.random() > 0.5 ? '50%' : '8%',
   }));
 
   return (
@@ -16,21 +17,23 @@ export const FloatingElements: React.FC = () => {
       {floatingShapes.map((shape) => (
         <motion.div
           key={shape.id}
-          className="absolute rounded-full opacity-10"
+          className="absolute opacity-10"
           style={{
             width: shape.size,
             height: shape.size,
-            background: `linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)))`,
+            borderRadius: shape.shape,
+            background: `linear-gradient(135deg, #6C63FF, #4A47A3)`,
+            boxShadow: '0 0 15px rgba(108, 99, 255, 0.4)',
           }}
           initial={{
             x: shape.initialX,
             y: shape.initialY,
           }}
           animate={{
-            x: [shape.initialX, shape.initialX + 100, shape.initialX - 50, shape.initialX],
-            y: [shape.initialY, shape.initialY - 100, shape.initialY + 50, shape.initialY],
-            rotate: [0, 360],
-            scale: [1, 1.2, 0.8, 1],
+            x: [shape.initialX, shape.initialX + 80, shape.initialX - 60, shape.initialX],
+            y: [shape.initialY, shape.initialY - 80, shape.initialY + 60, shape.initialY],
+            rotate: [0, 180, 360],
+            scale: [1, 1.15, 0.9, 1],
           }}
           transition={{
             duration: shape.duration,

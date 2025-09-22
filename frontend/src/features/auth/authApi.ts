@@ -10,6 +10,13 @@ export const authApi = baseApi.injectEndpoints({
         body: credentials,
       }),
     }),
+    refresh: builder.mutation<{ accessToken: string; refreshToken: string }, { userId: string; refreshToken: string }>({
+      query: (body) => ({
+        url: '/auth/refresh',
+        method: 'POST',
+        body,
+      }),
+    }),
     register: builder.mutation<void, RegisterRequest>({
       query: (userData) => ({
         url: '/auth/register',
@@ -17,11 +24,20 @@ export const authApi = baseApi.injectEndpoints({
         body: userData,
       }),
     }),
-    logoutServer: builder.mutation<void, void>({
-      query: () => ({ url: '/auth/logout', method: 'POST' }),
+    logoutServer: builder.mutation<void, { userId: string; refreshToken: string }>({
+      query: (body) => ({ url: '/auth/logout', method: 'POST', body }),
     }),
     getCurrentUser: builder.query<{ name: string; email: string }, void>({
       query: () => '/auth/whoami',
+    }),
+    listSessions: builder.query<Array<{ id: string; revoked: boolean; createdAt: string; expiresAt: string; userAgent?: string; ip?: string }>, void>({
+      query: () => '/auth/sessions',
+    }),
+    revokeSession: builder.mutation<{ message: string }, { sessionId: string }>({
+      query: (body) => ({ url: '/auth/sessions/revoke', method: 'POST', body }),
+    }),
+    securityEvents: builder.query<Array<{ type: string; at: string; userAgent?: string; ip?: string }>, void>({
+      query: () => '/auth/security-events',
     }),
   }),
   overrideExisting: false,
@@ -29,7 +45,11 @@ export const authApi = baseApi.injectEndpoints({
 
 export const {
   useLoginMutation,
+  useRefreshMutation,
   useLogoutServerMutation,
   useRegisterMutation,
   useGetCurrentUserQuery,
+  useListSessionsQuery,
+  useRevokeSessionMutation,
+  useSecurityEventsQuery,
 } = authApi;

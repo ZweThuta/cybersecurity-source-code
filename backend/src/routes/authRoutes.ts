@@ -16,7 +16,20 @@ export default (authController: AuthController, tokenService: TokenService) => {
   );
 
   router.post("/login", authController.login);
+  router.post(
+    "/refresh",
+    body("userId").isString(),
+    body("refreshToken").isString(),
+    authController.refresh
+  );
+  router.post(
+    "/logout",
+    body("userId").isString(),
+    body("refreshToken").isString(),
+    authController.logout
+  );
   router.get("/whoami", authMiddleware(tokenService), authController.whoami);
+  router.get("/security-events", authMiddleware(tokenService), authController.securityEvents);
 
   return router;
 };

@@ -1,6 +1,5 @@
-import { signupBg } from '@/assests';
 import { FloatingElements, ParticleEffect } from '@/components';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { useRegisterMutation } from '@/features/auth/authApi';
@@ -37,6 +36,22 @@ const RegisterPage: React.FC = () => {
 
   const [errors, setErrors] = useState<ErrorState>({});
   const [register, { isLoading }] = useRegisterMutation();
+
+  // --- Password strength ---
+  const { score, label, color, width } = useMemo(() => {
+    const pwd = form.password || '';
+    if (!pwd) return { score: 0, label: 'Enter a password', color: 'bg-gray-600', width: 'w-0' };
+    let s = 0;
+    if (pwd.length >= 8) s += 1;
+    if (/[A-Z]/.test(pwd) && /[a-z]/.test(pwd)) s += 1;
+    if (/\d/.test(pwd)) s += 1;
+    if (/[^\w\s]/.test(pwd)) s += 1;
+
+    // Map to 3 levels: weak (<=2), strong (3), very strong (4+)
+    if (s <= 2) return { score: s, label: 'Weak', color: 'bg-red-500', width: 'w-1/3' };
+    if (s === 3) return { score: s, label: 'Strong', color: 'bg-yellow-400', width: 'w-2/3' };
+    return { score: s, label: 'Very strong', color: 'bg-green-500', width: 'w-full' };
+  }, [form.password]);
 
   // --- Validation ---
   const validateField = (name: keyof FormState, value: string | boolean): string | undefined => {
@@ -103,52 +118,24 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    <section className="flex flex-col md:flex-row min-h-screen font-inter bg-[#1C1825]">
+    <section className="flex flex-col md:flex-row md:justify-center min-h-screen font-inter overflow-hidden">
       <FloatingElements />
       <ParticleEffect />
-
-      {/* Left Side */}
-      <div
-        className="hidden md:flex w-full md:w-1/2 bg-cover bg-center relative"
-        style={{ backgroundImage: `url(${signupBg})` }}
-      >
-        <div className="absolute top-5 left-5 flex gap-3">
-          <Link
-            to="/sign-up"
-            className="px-7 py-2 text-sm text-black font-semibold bg-white border border-white rounded-full hover:bg-white hover:text-black transition"
-          >
-            Sign Up
-          </Link>
-          <Link
-            to="/login"
-            className="px-7 py-2 text-white font-semibold rounded-full hover:opacity-80 hover:underline transition"
-          >
-            Join Us
-          </Link>
-        </div>
-
-        <div className="absolute bottom-10 left-0 mr-6 md:mr-16 lg:mr-36 flex flex-col gap-3 bg-[#1C1825]/60 border-b-2 border-r-2 border-t-2 border-[#9C6CFE] rounded-tr-3xl rounded-br-3xl px-6 md:px-8 lg:px-10 py-8 md:py-12 lg:py-16">
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-white">
-            Welcome to the Arena!
-          </h1>
-          <p className="text-gray-300 mt-3 text-sm md:text-base leading-relaxed text-justify">
-            Join our gaming community! Every player is a champion, every game is an adventure.
-          </p>
-        </div>
-      </div>
-
-      {/* Right Side */}
-      <div className="flex flex-col mt-20 mb-10 lg:mb-0 lg:mt-0 justify-center px-8 md:px-16 lg:px-24 bg-[#1C1825] w-full md:w-3/5">
+      <div className="flex flex-col mt-20 mb-10 lg:mb-0 lg:mt-0 justify-center px-8 md:px-16 lg:px-24 w-full lg:w-1/2">
         {/* Logo */}
-        <div className="mb-8 text-center md:text-left">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
-            Game<span className="text-[#9C6CFE]">Hub</span>
+        <div className="mb-10">
+          <h1 className="text-2xl font-extrabold flex gap-1 items-center text-white">
+            <Icon icon="mdi:shield-lock" className="w-7 h-7 text-white" /> Access
+            <span className="text-[#9C6CFE]">Hub</span>
           </h1>
         </div>
 
         {/* Heading */}
         <div className="mb-6 text-center md:text-left">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Register Here!</h1>
+          <p className="text-gray-300 mt-3 text-sm md:text-base leading-relaxed">
+            Register as a staff member and manage your profile securely.
+          </p>
         </div>
 
         {/* Form Inputs */}
@@ -197,6 +184,24 @@ const RegisterPage: React.FC = () => {
             );
           })}
         </div>
+        {/* Password Progress Bar */}
+        {
+          form.password &&   <div className="my-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm text-gray-300">Password strength</span>
+            {form.password && (
+              <span className={`text-sm ${label === 'Weak' ? 'text-red-400' : label === 'Strong' ? 'text-yellow-300' : 'text-green-400'}`}>{label}</span>
+            )}
+          </div>
+          <div className="w-full h-2 bg-[#3a3446] rounded">
+            <div className={`h-2 ${color} ${width} rounded transition-all duration-300`} />
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Use at least 8 characters with uppercase, lowercase, number and symbol for best security.
+          </p>
+        </div>
+        }
+      
 
         {/* Terms */}
         <div className="flex flex-col mt-4 text-sm sm:text-base">
@@ -219,7 +224,7 @@ const RegisterPage: React.FC = () => {
         <button
           onClick={handleSignUp}
           disabled={isLoading}
-          className="w-full py-3 mt-6 rounded-full bg-[#9C6CFE] text-white font-semibold text-lg shadow-lg hover:opacity-90 transition flex items-center justify-center"
+          className="w-full py-3 mt-6 rounded-full bg-[#9C6CFE] text-white font-semibold text-lg shadow-lg  hover:opacity-90 transition flex items-center justify-center"
         >
           {isLoading ? (
             <div className="flex items-center justify-center gap-2">
