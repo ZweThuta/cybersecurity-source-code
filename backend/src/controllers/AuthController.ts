@@ -4,6 +4,7 @@ import argon2 from "argon2";
 import mongoose from "mongoose";
 import UserModel from "../models/User";
 import TokenService from "../services/TokenService";
+import EmailService from "../services/EmailService";
 
 export default class AuthController {
   constructor(private tokenService: TokenService) {}
@@ -44,21 +45,71 @@ export default class AuthController {
     const ok = await argon2.verify(user.passwordHash, password);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
-    const token = await this.tokenService.createAccessToken(
-      user._id as mongoose.Types.ObjectId
-    );
-    const refreshToken = await this.tokenService.createRefreshToken(
-      user._id as mongoose.Types.ObjectId
-    );
+    // MFA: issue OTP to email and require verification before issuing tokens
+    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
+    const codeHash = await argon2.hash(code);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const OtpCode = (await import("../models/OtpCode")).default;
+    await OtpCode.create({ userId: user._id, codeHash, expiresAt, channel: "email" });
+
+    const emailer = new EmailService();
+    try {
+      await emailer.sendOtp(user.email, code);
+    } catch (e) {
+      return res.status(500).json({ message: "Failed to send OTP email" });
+    }
+
+    return res.json({ mfaRequired: true, userId: user._id });
+  };
+
+  verifyOtp = async (req: Request, res: Response) => {
+    const { userId, code } = req.body as { userId: string; code: string };
+    if (!userId || !code) return res.status(400).json({ message: "Missing fields" });
+    const OtpCode = (await import("../models/OtpCode")).default;
+    const record = await OtpCode.findOne({
+      userId: new mongoose.Types.ObjectId(userId),
+      consumed: false,
+      channel: "email",
+    }).sort({ createdAt: -1 });
+    if (!record) return res.status(401).json({ message: "OTP not found" });
+    if (record.expiresAt.getTime() < Date.now()) return res.status(401).json({ message: "OTP expired" });
+    const ok = await argon2.verify(record.codeHash, code);
+    if (!ok) return res.status(401).json({ message: "Invalid OTP" });
+    record.consumed = true;
+    await record.save();
+
+    // Issue tokens after successful OTP
+    const token = await this.tokenService.createAccessToken(new mongoose.Types.ObjectId(userId));
+    const refreshToken = await this.tokenService.createRefreshToken(new mongoose.Types.ObjectId(userId));
+    const user = await UserModel.findById(userId);
     return res.json({
       accessToken: token,
       refreshToken,
-      user: {
-        id: user._id,
-        name: user.name || user.email.split("@")[0],
-        email: user.email,
-      },
+      user: user
+        ? { id: user._id, name: user.name || user.email.split("@")[0], email: user.email }
+        : undefined,
     });
+  };
+
+  resendOtp = async (req: Request, res: Response) => {
+    const { userId } = req.body as { userId: string };
+    if (!userId) return res.status(400).json({ message: "Missing userId" });
+    const user = await UserModel.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeHash = await argon2.hash(code);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const OtpCode = (await import("../models/OtpCode")).default;
+    await OtpCode.create({ userId: user._id, codeHash, expiresAt, channel: "email" });
+
+    const emailer = new EmailService();
+    try {
+      await emailer.sendOtp(user.email, code);
+      return res.json({ message: "OTP resent" });
+    } catch (e) {
+      return res.status(500).json({ message: "Failed to send OTP email" });
+    }
   };
 
   refresh = async (req: Request, res: Response) => {

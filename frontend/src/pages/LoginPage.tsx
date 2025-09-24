@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { FloatingElements, ParticleEffect } from '@/components';
 import { useAppDispatch } from '@/hooks/useAppDispatch';
-import { useLoginMutation } from '@/features/auth/authApi';
+import { useLoginMutation, useVerifyOtpMutation, useResendOtpMutation } from '@/features/auth/authApi';
 import { setCredentials } from '@/features/auth/authSlice';
 import { toast } from 'react-hot-toast';
 
@@ -25,6 +25,50 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [login, { isLoading }] = useLoginMutation();
+  const [verifyOtp, { isLoading: verifying }] = useVerifyOtpMutation();
+  const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [otp, setOtp] = useState<string>("");
+
+  const handleVerifyOtp = async () => {
+    if (!pendingUserId || !otp) return;
+    try {
+      const res = await verifyOtp({ userId: pendingUserId, code: otp }).unwrap();
+      if (res.accessToken && res.user) {
+        dispatch(
+          setCredentials({
+            user: res.user,
+            token: res.accessToken,
+            refreshToken: res.refreshToken,
+          }),
+        );
+        localStorage.setItem(
+          'auth',
+          JSON.stringify({
+            user: res.user,
+            token: res.accessToken,
+            refreshToken: res.refreshToken,
+          }),
+        );
+        toast.success('Logged in successfully');
+        navigate('/');
+      } else {
+        toast.error('Invalid response');
+      }
+    } catch (e: any) {
+      toast.error(e?.data?.message || 'OTP verification failed');
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!pendingUserId) return;
+    try {
+      await resendOtp({ userId: pendingUserId }).unwrap();
+      toast.success('OTP resent');
+    } catch (e: any) {
+      toast.error(e?.data?.message || 'Failed to resend OTP');
+    }
+  };
 
   // --- Validation ---
   const validateField = (name: keyof FormState, value: string): string | undefined => {
@@ -59,23 +103,71 @@ const LoginPage: React.FC = () => {
 
     try {
       const res = await login({ email: form.email, password: form.password }).unwrap();
-      dispatch(
-        setCredentials({
-          user: res.user,
-          token: res.accessToken,
-          refreshToken: res.refreshToken,
-        }),
-      );
-      localStorage.setItem(
-        'auth',
-        JSON.stringify({
-          user: res.user,
-          token: res.accessToken,
-          refreshToken: res.refreshToken,
-        }),
-      );
-      toast.success('Welcome to the system!');
-      navigate('/');
+      if (res.mfaRequired && res.userId) {
+        setPendingUserId(res.userId);
+        toast.success('OTP sent to your email.');
+        return;
+      }
+      if (res.accessToken && res.user) {
+        dispatch(
+          setCredentials({
+            user: res.user,
+            token: res.accessToken,
+            refreshToken: res.refreshToken,
+          }),
+        );
+        localStorage.setItem(
+          'auth',
+          JSON.stringify({
+            user: res.user,
+            token: res.accessToken,
+            refreshToken: res.refreshToken,
+          }),
+        );
+        toast.success('Welcome to the system!');
+        navigate('/');
+        return;
+      }
+      toast.error('Unexpected response');
+  const handleVerifyOtp = async () => {
+    if (!pendingUserId || !otp) return;
+    try {
+      const res = await verifyOtp({ userId: pendingUserId, code: otp }).unwrap();
+      if (res.accessToken && res.user) {
+        dispatch(
+          setCredentials({
+            user: res.user,
+            token: res.accessToken,
+            refreshToken: res.refreshToken,
+          }),
+        );
+        localStorage.setItem(
+          'auth',
+          JSON.stringify({
+            user: res.user,
+            token: res.accessToken,
+            refreshToken: res.refreshToken,
+          }),
+        );
+        toast.success('Logged in successfully');
+        navigate('/');
+      } else {
+        toast.error('Invalid response');
+      }
+    } catch (e: any) {
+      toast.error(e?.data?.message || 'OTP verification failed');
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!pendingUserId) return;
+    try {
+      await resendOtp({ userId: pendingUserId }).unwrap();
+      toast.success('OTP resent');
+    } catch (e: any) {
+      toast.error(e?.data?.message || 'Failed to resend OTP');
+    }
+  };
     } catch (err: any) {
       console.error('Login failed:', err);
       toast.error(err?.data?.message || 'Invalid credentials');
@@ -145,21 +237,53 @@ const LoginPage: React.FC = () => {
           Forgot password?
         </Link>
 
-        {/* Login Button */}
-        <button
-          onClick={handleLogin}
-          disabled={isLoading}
-          className="w-full py-3 rounded-full bg-[#9C6CFE] text-white font-semibold text-lg shadow-lg hover:opacity-90 transition flex items-center justify-center"
-        >
-          {isLoading ? (
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Signing in...</span>
+        {/* Login or OTP Step */}
+        {pendingUserId ? (
+          <div className="mt-4 space-y-3">
+            <div className="relative">
+              <Icon icon="mdi:onepassword" className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                placeholder="Enter 6-digit OTP"
+                className="w-full pl-10 pr-4 py-3 rounded-md bg-[#2A2633] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9C6CFE]"
+              />
             </div>
-          ) : (
-            'Login'
-          )}
-        </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleVerifyOtp}
+                disabled={verifying}
+                className="flex-1 py-3 rounded-full bg-[#9C6CFE] text-white font-semibold text-lg shadow-lg hover:opacity-90 transition"
+              >
+                {verifying ? 'Verifying…' : 'Verify OTP'}
+              </button>
+              <button
+                onClick={handleResendOtp}
+                disabled={resending}
+                className="px-4 rounded-full bg-[#3A3446] text-white font-semibold hover:opacity-90 transition"
+              >
+                {resending ? 'Resending…' : 'Resend'}
+              </button>
+            </div>
+            <p className="text-gray-400 text-sm">We sent an OTP to your email. It expires in 5 minutes.</p>
+          </div>
+        ) : (
+          <button
+            onClick={handleLogin}
+            disabled={isLoading}
+            className="w-full py-3 rounded-full bg-[#9C6CFE] text-white font-semibold text-lg shadow-lg hover:opacity-90 transition flex items-center justify-center"
+          >
+            {isLoading ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Signing in...</span>
+              </div>
+            ) : (
+              'Login'
+            )}
+          </button>
+        )}
 
         {/* Sign Up */}
         <div className="text-center text-white text-sm mt-4">

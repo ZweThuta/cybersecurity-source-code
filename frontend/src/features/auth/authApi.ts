@@ -10,6 +10,16 @@ export const authApi = baseApi.injectEndpoints({
         body: credentials,
       }),
     }),
+    verifyOtp: builder.mutation<{ accessToken: string; refreshToken: string; user: any }, { userId: string; code: string }>({
+      query: (body) => ({
+        url: '/auth/verify-otp',
+        method: 'POST',
+        body,
+      }),
+    }),
+    resendOtp: builder.mutation<{ message: string }, { userId: string }>({
+      query: (body) => ({ url: '/auth/resend-otp', method: 'POST', body }),
+    }),
     refresh: builder.mutation<{ accessToken: string; refreshToken: string }, { userId: string; refreshToken: string }>({
       query: (body) => ({
         url: '/auth/refresh',
@@ -45,6 +55,8 @@ export const authApi = baseApi.injectEndpoints({
 
 export const {
   useLoginMutation,
+  useVerifyOtpMutation,
+  useResendOtpMutation,
   useRefreshMutation,
   useLogoutServerMutation,
   useRegisterMutation,

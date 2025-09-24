@@ -15,6 +15,9 @@ This document describes the complete authentication flow implemented in the Game
 7. [API Endpoints](#api-endpoints)
 8. [Error Handling](#error-handling)
 9. [Database Schema](#database-schema)
+10. [Multi-Factor Authentication (Email OTP)](#multi-factor-authentication-email-otp)
+11. [Sessions and Security Events](#sessions-and-security-events)
+12. [Frontend UX Updates](#frontend-ux-updates)
 
 ## System Architecture
 
@@ -102,18 +105,39 @@ sequenceDiagram
         alt Password invalid
             AuthController-->>Client: 401 Unauthorized
         else Password valid
-            AuthController->>TokenService: createAccessToken(userId)
-            TokenService->>TokenService: Generate JWT with RS256
-            TokenService->>TokenService: Create JTI (UUID)
-            TokenService->>TokenService: Hash JTI with Argon2
-            TokenService->>TokenModel: Store token record
-            TokenModel->>Database: Insert token document
-            TokenService-->>AuthController: Access token
-            
-            AuthController-->>Client: 200 OK
-            Note over AuthController,Client: { user, accessToken }
+            AuthController->>EmailService: sendOtp(email, code)
+            EmailService-->>AuthController: sent
+            AuthController-->>Client: { mfaRequired: true, userId }
         end
     end
+### 2b. MFA (Email OTP) Verification
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant AuthController
+    participant OtpCodeModel
+    participant TokenService
+    participant TokenModel
+    participant RefreshTokenModel
+
+    Client->>AuthController: POST /api/auth/verify-otp
+    Note over Client,AuthController: { userId, code }
+    
+    AuthController->>OtpCodeModel: find latest for userId (not consumed, not expired)
+    OtpCodeModel-->>AuthController: OTP record
+    alt Invalid/Expired
+        AuthController-->>Client: 401 Unauthorized
+    else Valid
+        AuthController->>OtpCodeModel: mark consumed
+        AuthController->>TokenService: createAccessToken(userId)
+        TokenService->>TokenModel: store JTI hash with expiry
+        AuthController->>TokenService: createRefreshToken(userId)
+        TokenService->>RefreshTokenModel: store tokenHash, userAgent/ip/expiry
+        TokenService-->>AuthController: accessToken, refreshToken
+        AuthController-->>Client: { user, accessToken, refreshToken }
+    end
+```
 ```
 
 ### 3. Token Verification Process
@@ -369,10 +393,26 @@ async verifyAccessToken(token: string) {
 }
 ```
 
+### 3. Refresh Token Rotation
+- Long-lived refresh tokens are opaque UUIDs, stored hashed (`argon2`) in `RefreshToken` collection with TTL and metadata.
+- On access token expiry (401), the frontend calls `/auth/refresh` with `{ userId, refreshToken }`.
+- Backend verifies hash, revokes current refresh token, creates a new one (rotation), and issues a new access token.
+
+```typescript
+// POST /auth/refresh handler (simplified)
+await tokenService.verifyRefreshToken(userId, refreshToken);
+const accessToken = await tokenService.createAccessToken(new ObjectId(userId));
+const newRefreshToken = await tokenService.rotateRefreshToken(new ObjectId(userId), refreshToken);
+return res.json({ accessToken, refreshToken: newRefreshToken });
+```
+
 ### 3. Token Expiration
 - **Default Duration**: 1 hour (3600 seconds)
 - **Auto-cleanup**: MongoDB TTL index on `expiresAt` field
 - **Refresh Strategy**: Currently requires re-login (can be extended with refresh tokens)
+
+Updated:
+- Refresh tokens implemented with rotation; automatic refresh on 401 in frontend.
 
 ## API Endpoints
 
@@ -402,7 +442,7 @@ async verifyAccessToken(token: string) {
   ```
 
 #### POST /api/auth/login
-- **Purpose**: Authenticate user
+- **Purpose**: Begin authentication; send OTP if credentials are valid
 - **Request Body**:
   ```json
   {
@@ -411,18 +451,53 @@ async verifyAccessToken(token: string) {
   }
   ```
 - **Response**:
+  - If MFA required:
+    ```json
+    { "mfaRequired": true, "userId": "string" }
+    ```
+  - Otherwise (if MFA disabled):
+    ```json
+    { "user": {"id":"string","name":"string","email":"string"}, "accessToken": "string", "refreshToken": "string" }
+    ```
+
+#### POST /api/auth/verify-otp
+- **Purpose**: Verify email OTP and issue tokens
+- **Request Body**:
   ```json
-  {
-    "user": {
-      "id": "string",
-      "name": "string",
-      "email": "string"
-    },
-    "accessToken": "string"
-  }
+  { "userId": "string", "code": "123456" }
+  ```
+- **Response**:
+  ```json
+  { "user": {"id":"string","name":"string","email":"string"}, "accessToken": "string", "refreshToken": "string" }
+  ```
+
+#### POST /api/auth/resend-otp
+- **Purpose**: Resend OTP to email
+- **Request Body**:
+  ```json
+  { "userId": "string" }
+  ```
+- **Response**:
+  ```json
+  { "message": "OTP resent" }
   ```
 
 #### GET /api/auth/whoami
+#### POST /api/auth/refresh
+- **Purpose**: Rotate refresh token and issue a new access token
+- **Request Body**: `{ "userId": "string", "refreshToken": "string" }`
+- **Response**: `{ "accessToken": "string", "refreshToken": "string" }`
+
+#### GET /api/auth/sessions
+- **Purpose**: List refresh-token sessions for the authenticated user
+- **Auth**: Bearer access token
+- **Response**: Array of `{ id, revoked, createdAt, expiresAt, userAgent?, ip? }`
+
+#### POST /api/auth/sessions/revoke
+- **Purpose**: Revoke a specific refresh-token session
+- **Auth**: Bearer access token
+- **Request Body**: `{ "sessionId": "string" }`
+- **Response**: `{ "message": "Session revoked" }`
 - **Purpose**: Get current user information
 - **Headers**: `Authorization: Bearer <token>`
 - **Response**:
@@ -480,6 +555,66 @@ interface IToken {
   createdAt: Date;
 }
 ```
+
+### RefreshToken Collection
+```typescript
+interface IRefreshToken {
+  _id: ObjectId;
+  userId: ObjectId;     // Reference to User
+  tokenHash: string;    // Argon2 hash of opaque refresh token
+  expiresAt: Date;      // TTL index for auto-cleanup
+  revoked: boolean;
+  replacedByTokenHash?: string;
+  userAgent?: string;
+  ip?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### OtpCode Collection
+```typescript
+interface IOtpCode {
+  _id: ObjectId;
+  userId: ObjectId;
+  codeHash: string;     // Argon2 hash of 6-digit code
+  expiresAt: Date;      // ~5 minutes
+  consumed: boolean;    // Prevent reuse
+  channel: 'email';
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+## Multi-Factor Authentication (Email OTP)
+
+### Overview
+- After password verification, the backend sends a 6-digit OTP to the user's email using SMTP (Nodemailer).
+- Backend stores only a hash of the OTP, with a 5-minute expiry, and marks it consumed after use.
+- The client submits the OTP via `/auth/verify-otp` to receive access and refresh tokens.
+
+### SMTP Configuration
+Set the following environment variables for the backend:
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SENDER_EMAIL=youraddress@gmail.com
+SENDER_PASSWORD=your_app_password
+```
+
+## Sessions and Security Events
+
+- Sessions are represented by refresh tokens (hashed) with metadata (userAgent, ip, createdAt, expiresAt, revoked).
+- The dashboard lists active sessions and allows revocation via `/auth/sessions` and `/auth/sessions/revoke`.
+- Security events are derived from refresh-token lifecycle (issued, rotated, revoked) and exposed at `/auth/security-events`.
+
+## Frontend UX Updates
+
+- Login now supports a two-step flow: credentials → OTP.
+- Token countdown UI decodes `exp` from JWT and updates every second.
+- Automatic token refresh is handled in a wrapped base query that retries the original request after a successful `/auth/refresh`.
+- Dashboard widgets display token status, sessions with revoke controls, and recent security events.
 
 ## Frontend State Management
 

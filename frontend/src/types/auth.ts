@@ -5,8 +5,12 @@ export interface User {
 }
 
 export interface LoginResponse {
-  user: User;
-  accessToken: string;
+  // Case 1: MFA required
+  mfaRequired?: boolean;
+  userId?: string;
+  // Case 2: Tokens issued
+  user?: User;
+  accessToken?: string;
   refreshToken?: string;
 }
 
