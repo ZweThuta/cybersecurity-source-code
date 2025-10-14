@@ -644,11 +644,73 @@ Updated:
 
 ## Error Handling
 
-### Backend Error Responses
+### Overview
 
-```typescript
-// 400 Bad Request
-{ "errors": [{ "field": "email", "message": "Invalid email" }] }
+- Validation errors: 400 with details (express-validator) in register/OTP endpoints.
+- Authentication errors: 401 for invalid credentials, missing/invalid Bearer token, expired/invalid JWT, invalid/expired/unknown refresh token, invalid/expired OTP.
+- Authorization errors: 403 when revoking a session not owned by the user.
+- Not found: 404 for unknown sessionId or resources.
+- Conflict: 409 when registering an existing email.
+- Rate limiting: 429 from express-rate-limit when thresholds are exceeded.
+- Server errors: 500 for unexpected failures (e.g., SMTP send failure); messages are generic to avoid information leakage.
+
+### Backend – by component
+
+- Register
+  - 400: validation errors
+  - 409: user exists
+  - 201: success
+- Login
+  - 401: user not found or invalid password
+  - 200: { mfaRequired, userId } (MFA step)
+- Verify OTP
+  - 400: missing fields
+  - 401: OTP not found/expired/mismatch
+  - 200: returns tokens
+- Resend OTP
+  - 400/404: missing userId or user not found
+  - 500: email send failure
+  - 200: "OTP resent"
+- Refresh
+  - 400: missing fields
+  - 401: invalid/expired refresh token
+  - 200: new tokens
+- Logout
+  - 400: missing fields
+  - 200: best-effort "Logged out"
+- Whoami
+  - 401: unauthenticated
+- Sessions list / revoke
+  - 401: unauthenticated
+  - 400: missing sessionId (revoke)
+  - 404: session not found (revoke)
+  - 403: forbidden (not owner)
+  - 200: success
+- Middleware (auth)
+  - 401: missing header, invalid scheme, invalid/expired JWT, JTI mismatch, user missing
+- TokenService
+  - throws on JWT verify failures, no token record, JTI/argon2 mismatch, invalid/expired refresh
+- EmailService
+  - throws on transport errors → controller returns 500
+- DB
+  - startup failures exit process; runtime errors bubble as 500
+
+### HTTP status code map
+
+- 200/201: OK/Created
+- 400: Bad Request (invalid/missing inputs)
+- 401: Unauthorized (auth/OTP/token failures)
+- 403: Forbidden (not resource owner)
+- 404: Not Found (missing resource)
+- 409: Conflict (duplicate register)
+- 429: Too Many Requests (rate limited)
+- 500: Internal Server Error (unexpected or SMTP errors)
+
+### Backend response examples
+
+```json
+// 400 Bad Request (validation)
+{ "errors": [{ "msg": "Invalid email", "param": "email" }] }
 
 // 401 Unauthorized
 { "message": "Unauthorized" }
@@ -657,15 +719,30 @@ Updated:
 { "message": "User exists" }
 ```
 
-### Frontend Error Handling
+### Frontend handling (RTK Query)
 
-```typescript
-// Redux Toolkit Query error handling
-const [login, { isLoading, error }] = useLoginMutation();
+```ts
+// Automatic re-auth on 401 in baseQueryWithReauth
+if (result.error && (result.error as any).status === 401) {
+  const stored = localStorage.getItem("auth");
+  // call /auth/refresh with userId + refreshToken; update localStorage; retry
+}
 
-// Toast notifications
-toast.error(err?.data?.message || "Invalid credentials");
+// Example toast usage per-request
+try {
+  await login({ email, password }).unwrap();
+} catch (err: any) {
+  toast.error(err?.data?.message || "Invalid credentials");
+}
 ```
+
+### Safety measures
+
+- Use generic messages (avoid leaking whether email exists).
+- Strict JWT validation (iss/aud/exp) and short-lived access tokens.
+- JTI hashing and refresh token rotation to prevent replay.
+- TTL indexes to clean up expired OTPs/tokens.
+- CORS, Helmet, rate limiting to reduce attack surface.
 
 ## Database Schema
 
