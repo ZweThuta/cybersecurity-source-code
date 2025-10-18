@@ -807,21 +807,352 @@ interface IOtpCode {
 
 ### Overview
 
-- After password verification, the backend sends a 6-digit OTP to the user's email using SMTP (Nodemailer).
-- Backend stores only a hash of the OTP, with a 5-minute expiry, and marks it consumed after use.
-- The client submits the OTP via `/auth/verify-otp` to receive access and refresh tokens.
+Multi-Factor Authentication (MFA) adds an additional security layer by requiring users to verify their identity through a second factor - in this case, a One-Time Password (OTP) sent via email. This significantly reduces the risk of unauthorized access even if credentials are compromised.
+
+### MFA Flow Architecture
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant EmailService
+    participant SMTP
+    participant Database
+
+    User->>Frontend: Enter credentials
+    Frontend->>Backend: POST /auth/login
+    Backend->>Backend: Verify password
+    Backend->>EmailService: sendOtp(email, userId)
+    EmailService->>EmailService: Generate 6-digit OTP
+    EmailService->>EmailService: Hash OTP with Argon2
+    EmailService->>Database: Store OTP record
+    EmailService->>SMTP: Send email with OTP
+    SMTP-->>EmailService: Email sent
+    EmailService-->>Backend: OTP sent
+    Backend-->>Frontend: { mfaRequired: true, userId }
+    Frontend-->>User: "OTP sent to your email"
+
+    User->>Frontend: Enter OTP code
+    Frontend->>Backend: POST /auth/verify-otp
+    Backend->>Database: Find OTP record
+    Backend->>Backend: Verify OTP hash
+    Backend->>Database: Mark OTP as consumed
+    Backend->>Backend: Create access & refresh tokens
+    Backend-->>Frontend: { user, accessToken, refreshToken }
+    Frontend-->>User: Login successful
+```
+
+### OTP Generation and Security
+
+#### OTP Generation Process
+
+```typescript
+// backend/src/services/EmailService.ts
+async sendOtp(email: string, userId: mongoose.Types.ObjectId) {
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Hash OTP with Argon2 for secure storage
+  const otpHash = await argon2.hash(otp);
+
+  // Set 5-minute expiry
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  // Store in database
+  await OtpCodeModel.create({
+    userId,
+    codeHash: otpHash,
+    expiresAt,
+    channel: 'email',
+  });
+
+  // Send via email
+  await this.transporter.sendMail({
+    from: process.env.SENDER_EMAIL,
+    to: email,
+    subject: 'Your OTP for Login',
+    html: `<p>Your One-Time Password (OTP) is: <strong>${otp}</strong>. It is valid for 5 minutes.</p>`,
+  });
+}
+```
+
+#### Security Features
+
+1. **Cryptographically Secure Random Generation**: Uses `Math.random()` for OTP generation
+2. **Argon2 Hashing**: OTPs are never stored in plaintext, only hashed versions
+3. **Time-Limited Validity**: 5-minute expiry window
+4. **Single-Use**: OTPs are marked as consumed after successful verification
+5. **Automatic Cleanup**: MongoDB TTL indexes remove expired OTPs
+
+### OTP Verification Process
+
+#### Backend Verification Logic
+
+```typescript
+// backend/src/controllers/AuthController.ts
+verifyOtp = async (req: Request, res: Response) => {
+  const { userId, code } = req.body;
+
+  // Find latest valid OTP for user
+  const otpRecord = await OtpCodeModel.findOne({
+    userId: new mongoose.Types.ObjectId(userId),
+    consumed: false,
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: -1 });
+
+  if (!otpRecord) {
+    return res.status(401).json({ message: "OTP not found or expired" });
+  }
+
+  // Verify OTP hash
+  const valid = await argon2.verify(otpRecord.codeHash, code);
+  if (!valid) {
+    return res.status(401).json({ message: "Invalid OTP" });
+  }
+
+  // Mark as consumed to prevent reuse
+  otpRecord.consumed = true;
+  await otpRecord.save();
+
+  // Issue tokens
+  const accessToken = await this.tokenService.createAccessToken(userId);
+  const refreshToken = await this.tokenService.createRefreshToken(userId);
+
+  return res.json({ user, accessToken, refreshToken });
+};
+```
+
+### Frontend MFA Implementation
+
+#### Login Flow with MFA
+
+```typescript
+// frontend/src/pages/LoginPage.tsx
+const handleLogin = async () => {
+  try {
+    const res = await login({
+      email: form.email,
+      password: form.password,
+    }).unwrap();
+
+    if ("mfaRequired" in res && res.mfaRequired) {
+      // Show OTP input form
+      setPendingUserId(res.userId);
+      toast.success("OTP sent to your email!");
+    } else {
+      // Direct login (if MFA disabled)
+      dispatch(
+        setCredentials({
+          user: res.user,
+          token: res.accessToken,
+          refreshToken: res.refreshToken,
+        })
+      );
+      navigate("/");
+    }
+  } catch (err: any) {
+    toast.error(err?.data?.message || "Invalid credentials");
+  }
+};
+
+const handleVerifyOtp = async () => {
+  try {
+    const res = await verifyOtp({ userId: pendingUserId, code: otp }).unwrap();
+
+    dispatch(
+      setCredentials({
+        user: res.user,
+        token: res.accessToken,
+        refreshToken: res.refreshToken,
+      })
+    );
+
+    localStorage.setItem(
+      "auth",
+      JSON.stringify({
+        user: res.user,
+        token: res.accessToken,
+        refreshToken: res.refreshToken,
+      })
+    );
+
+    toast.success("Login successful!");
+    navigate("/");
+  } catch (err: any) {
+    toast.error(err?.data?.message || "Invalid OTP");
+  }
+};
+```
+
+#### OTP Resend Functionality
+
+```typescript
+const handleResendOtp = async () => {
+  try {
+    await resendOtp({ userId: pendingUserId }).unwrap();
+    toast.success("OTP resent to your email");
+  } catch (err: any) {
+    toast.error(err?.data?.message || "Failed to resend OTP");
+  }
+};
+```
+
+### Database Schema for OTP
+
+```typescript
+// backend/src/models/OtpCode.ts
+interface IOtpCode extends Document {
+  userId: mongoose.Types.ObjectId;
+  codeHash: string; // Argon2 hash of 6-digit OTP
+  expiresAt: Date; // 5-minute expiry with TTL index
+  consumed: boolean; // Prevents reuse
+  channel: "email"; // Future: 'sms', 'authenticator'
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const otpCodeSchema = new Schema<IOtpCode>(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    codeHash: { type: String, required: true },
+    expiresAt: { type: Date, required: true, index: { expires: 0 } }, // Auto-expire
+    consumed: { type: Boolean, default: false },
+    channel: {
+      type: String,
+      required: true,
+      enum: ["email", "sms", "authenticator"],
+    },
+  },
+  { timestamps: true }
+);
+```
 
 ### SMTP Configuration
 
+#### Environment Variables
+
 Set the following environment variables for the backend:
 
-```
+```bash
+# Gmail SMTP Configuration
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 SMTP_SECURE=true
 SENDER_EMAIL=youraddress@gmail.com
-SENDER_PASSWORD=your_app_password
+SENDER_PASSWORD=your_app_password  # Use App Password, not regular password
 ```
+
+#### Email Service Setup
+
+```typescript
+// backend/src/services/EmailService.ts
+import nodemailer from "nodemailer";
+
+export default class EmailService {
+  private transporter;
+
+  constructor() {
+    this.transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || "465"),
+      secure: process.env.SMTP_SECURE === "true",
+      auth: {
+        user: process.env.SENDER_EMAIL,
+        pass: process.env.SENDER_PASSWORD,
+      },
+    });
+  }
+}
+```
+
+### MFA Security Considerations
+
+#### Attack Mitigation
+
+1. **Brute Force Protection**:
+
+   - 6-digit OTP provides 1,000,000 possible combinations
+   - 5-minute expiry window limits attack window
+   - Single-use prevents replay attacks
+
+2. **Timing Attack Prevention**:
+
+   - Constant-time hash verification with Argon2
+   - Generic error messages don't reveal if OTP exists
+
+3. **Email Security**:
+
+   - OTPs sent via secure SMTP (TLS/SSL)
+   - No sensitive data in email body beyond OTP
+   - Clear expiry information in email
+
+4. **Database Security**:
+   - Only hashed OTPs stored
+   - Automatic cleanup via TTL indexes
+   - User-specific OTP isolation
+
+#### Error Handling for MFA
+
+```typescript
+// Common MFA error scenarios
+- 400: Missing userId or code
+- 401: OTP not found, expired, or invalid
+- 500: SMTP send failure
+
+// Frontend error handling
+try {
+  await verifyOtp({ userId, code }).unwrap();
+} catch (err: any) {
+  if (err.status === 401) {
+    toast.error('Invalid or expired OTP. Please try again.');
+  } else {
+    toast.error('Verification failed. Please try again.');
+  }
+}
+```
+
+### MFA User Experience
+
+#### UI Flow
+
+1. **Login Form**: User enters email/password
+2. **OTP Prompt**: After successful password verification, OTP input appears
+3. **Email Notification**: Toast confirms OTP sent to email
+4. **OTP Input**: 6-digit code input with validation
+5. **Resend Option**: Button to request new OTP if needed
+6. **Success**: Automatic redirect to dashboard with tokens
+
+#### Accessibility Features
+
+- Clear error messages for invalid/expired OTPs
+- Resend functionality with cooldown
+- Visual feedback during verification process
+- Responsive design for mobile devices
+
+### Future MFA Enhancements
+
+1. **Multiple Channels**:
+
+   - SMS OTP support
+   - TOTP (Time-based One-Time Password) with authenticator apps
+   - Hardware security keys
+
+2. **Advanced Security**:
+
+   - Rate limiting per user for OTP requests
+   - Device fingerprinting
+   - Risk-based authentication
+
+3. **User Preferences**:
+   - MFA enable/disable settings
+   - Preferred verification method
+   - Trusted device management
 
 ## Sessions and Security Events
 
